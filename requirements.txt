@@ -1,0 +1,14 @@
+# Core Simulation Libraries
+cadCAD                  # Complex Adaptive Dynamics - our simulation engine
+pandas
+numpy
+
+# Order Book Engine
+order-book
+
+matplotlib
+seaborn                  
+
+# Utilities
+python-dateutil             # For handling dates and times in simulation
+
