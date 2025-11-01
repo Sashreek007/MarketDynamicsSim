@@ -4,7 +4,7 @@ pandas
 numpy
 
 # Order Book Engine
-order-book
+order-matching
 
 matplotlib
 seaborn                  
