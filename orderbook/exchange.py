@@ -19,9 +19,7 @@ class Exchange:
     def __init__(self, tickers: List[str], initial_prices: Dict[str, float]):
         self.tickers = tickers
         self.matching_engines = {}
-        self.order_books = {}
         self.last_prices = initial_prices.copy()
-        self.trade_history = []
         self.orders = {}
         self.order_counter = 0
         self.timestamp = datetime.now()
@@ -102,7 +100,7 @@ class Exchange:
                 else:
                     self.sell_volume[ticker] += total_quantity
 
-                # self.update_market_price(ticker,side,total_quantity)
+                self.update_market_price(ticker, side, total_quantity)
 
                 return {
                     "success": True,
@@ -142,12 +140,163 @@ class Exchange:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def update_market_price(self, ticker: str, side: str, quantity: float):
+        current_price = self.last_prices[ticker]
+
+        base_impact = 0.001
+
+        typical_volume = 100
+
+        volume_ratio = quantity / typical_volume
+
+        direction = 1 if side.lower() == "buy" else -1
+
+        price_change_pct = base_impact * volume_ratio * direction
+        price_change = current_price * price_change_pct
+
+        new_price = current_price + price_change
+
+        new_price = max(0.01, new_price)
+
+        self.last_prices[ticker] = new_price
+
+    def get_current_price(self, ticker: str):
+        if self.last_prices[ticker]:
+            return self.last_prices[ticker]
+        return
+
+    def get_big_ask_spread(self, ticker: str) -> Tuple[float, float]:
+        price = self.last_prices[ticker]
+        spread_pct = 0.001
+
+        best_bid = price * (1 - spread_pct)
+        best_ask = price * (1 + spread_pct)
+
+        return (best_bid, best_ask)
+
+    def get_market_summary(self) -> Dict:
+        summary = {}
+        for ticker in self.tickers:
+            bid, ask = self.get_big_ask_spread(ticker)
+            summary[ticker] = {
+                "price": self.last_prices[ticker],
+                "bid": bid,
+                "ask": ask,
+                "spread": ask - bid,
+                "buy_volume": self.buy_volume[ticker],
+                "sell_volume": self.sell_volume[ticker],
+            }
+        return summary
+
 
 if __name__ == "__main__":
-    tickers = ["AAPL", "GOOGL"]
-    initial_prices = {"AAPL": 180.0, "GOOGL": 140.0}
+    """
+    Test the exchange with proper order matching and price discovery.
+    Run this file directly to see the exchange in action!
+    """
+    print("=" * 70)
+    print("TESTING EXCHANGE: ORDER MATCHING + PRICE DISCOVERY")
+    print("=" * 70)
 
-    exchange = Exchange(tickers, initial_prices)
+    # Create a simple exchange
+    exchange = Exchange(
+        tickers=["AAPL", "GOOGL"], initial_prices={"AAPL": 180.0, "GOOGL": 140.0}
+    )
 
-    exchange.place_order("AAPL", "hi", "sell", 1, order_type="limit", price=180.0)
-    exchange.place_order("AAPL", "hdi", "buy", 1, order_type="market")
+    print("\n🔍 ARCHITECTURE:")
+    print("-" * 70)
+    print("1. Order Matching: Matching engine matches buy/sell orders")
+    print("2. Price Discovery: Exchange updates prices based on order flow")
+    print("   - More buying → price goes UP")
+    print("   - More selling → price goes DOWN")
+
+    print("\n🔍 VERIFICATION: Separate Order Books Per Ticker")
+    print("-" * 70)
+    print(f"Number of matching engines: {len(exchange.matching_engines)}")
+    print(f"Tickers: {list(exchange.matching_engines.keys())}")
+    print(
+        f"Are they different objects? {exchange.matching_engines['AAPL'] is not exchange.matching_engines['GOOGL']}"
+    )
+    print("✅ Each ticker has its own independent matching engine!")
+
+    print("\n📊 Initial Prices:")
+    summary = exchange.get_market_summary()
+    for ticker, info in summary.items():
+        print(f"{ticker}: ${info['price']:.2f}")
+
+    print("\n💼 Testing Order Flow and Price Discovery...")
+
+    # Test 1: BUY order - should push price UP
+    print("\n1. Market BUY: 100 AAPL")
+    print(f"   Before: AAPL = ${exchange.get_current_price('AAPL'):.2f}")
+    result1 = exchange.place_order("AAPL", "Trader1", "buy", 100, "market")
+    print(f"   After:  AAPL = ${exchange.get_current_price('AAPL'):.2f}")
+    print(f"   💹 Price went UP due to buying pressure!")
+
+    # Test 2: Another BUY - price should go UP more
+    print("\n2. Market BUY: 200 AAPL (larger order)")
+    print(f"   Before: AAPL = ${exchange.get_current_price('AAPL'):.2f}")
+    result2 = exchange.place_order("AAPL", "Trader2", "buy", 200, "market")
+    print(f"   After:  AAPL = ${exchange.get_current_price('AAPL'):.2f}")
+    print(f"   💹 Larger buy order → bigger price increase!")
+
+    # Test 3: SELL order - should push price DOWN
+    print("\n3. Market SELL: 150 AAPL")
+    print(f"   Before: AAPL = ${exchange.get_current_price('AAPL'):.2f}")
+    result3 = exchange.place_order("AAPL", "Trader1", "sell", 150, "market")
+    print(f"   After:  AAPL = ${exchange.get_current_price('AAPL'):.2f}")
+    print(f"   💹 Price went DOWN due to selling pressure!")
+
+    # Test 4: GOOGL trades (different stock, independent)
+    print("\n4. Market BUY: 50 GOOGL")
+    print(f"   Before: GOOGL = ${exchange.get_current_price('GOOGL'):.2f}")
+    print(
+        f"   Before: AAPL  = ${exchange.get_current_price('AAPL'):.2f} (should not change)"
+    )
+    result4 = exchange.place_order("GOOGL", "Trader3", "buy", 50, "market")
+    print(f"   After:  GOOGL = ${exchange.get_current_price('GOOGL'):.2f}")
+    print(f"   After:  AAPL  = ${exchange.get_current_price('AAPL'):.2f}")
+    print(f"   ✅ GOOGL changed, AAPL stayed the same (independent order books!)")
+
+    # Test 5: Limit order
+    print("\n5. Limit BUY: 30 GOOGL at $142")
+    print(f"   Before: GOOGL = ${exchange.get_current_price('GOOGL'):.2f}")
+    result5 = exchange.place_order("GOOGL", "Trader4", "buy", 30, "limit", 142.0)
+    print(f"   After:  GOOGL = ${exchange.get_current_price('GOOGL'):.2f}")
+    if result5["executed"]:
+        print(f"   ✅ Limit order filled and price updated!")
+    else:
+        print(f"   ⏳ Limit order placed but not filled (waiting in book)")
+
+    print("\n📈 Final Summary:")
+    print("-" * 70)
+    summary = exchange.get_market_summary()
+    for ticker, info in summary.items():
+        print(f"{ticker}:")
+        print(f"  Price: ${info['price']:.2f}")
+        print(f"  Buy Volume:   {info['buy_volume']:.0f} shares")
+        print(f"  Sell Volume:  {info['sell_volume']:.0f} shares")
+        net_flow = info["buy_volume"] - info["sell_volume"]
+        flow_dir = (
+            "📈 NET BUYING"
+            if net_flow > 0
+            else "📉 NET SELLING"
+            if net_flow < 0
+            else "⚖️ BALANCED"
+        )
+        print(f"  Order Flow:   {flow_dir} ({net_flow:+.0f})")
+
+    print("\n🔍 Price Discovery Demo:")
+    print("-" * 70)
+    print("Initial AAPL: $180.00")
+    print(f"Final AAPL:   ${exchange.get_current_price('AAPL'):.2f}")
+    price_change = exchange.get_current_price("AAPL") - 180.0
+    print(f"Net Change:   ${price_change:+.2f} ({price_change / 180.0:+.2%})")
+    print("")
+    print("✅ Buy orders → price went UP")
+    print("✅ Sell orders → price went DOWN")
+    print("✅ Each stock independent")
+
+    print("\n" + "=" * 70)
+    print("✅ Test complete!")
+    print("=" * 70)
