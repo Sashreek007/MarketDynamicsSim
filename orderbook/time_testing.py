@@ -90,7 +90,7 @@ def simulate_matching(num_orders=10000):
     end_time = time.time()
 
     elapsed = end_time - start_time
-    print(f"\n✅ Simulation finished in {elapsed:.2f} s for {num_orders} orders.")
+    print(f"\n Simulation finished in {elapsed:.2f} s for {num_orders} orders.")
     print(f"   Trades executed: {total_trades}")
     print(f"   Avg time per order: {(elapsed / num_orders) * 1000:.3f} ms")
     print(f"   Logged to: {LOG_FILE}")
