@@ -13,9 +13,6 @@ from order_matching.order import MarketOrder
 from order_matching.trade import Trade
 import numpy as np
 from typing import Dict, List, Tuple, Optional
-from pprint import pp
-import random
-import time
 
 
 class Exchange:
@@ -33,11 +30,10 @@ class Exchange:
 
         for ticker in tickers:
             self.matching_engines[ticker] = MatchingEngine(seed=42)
-            self.orders[ticker] = Orders()
-
+        """
         print(f"Exchange initialized with {len(tickers)} stocks")
         for ticker, price in initial_prices.items():
-            print(f"{ticker}: ${price:.2f}")
+            print(f"{ticker}: ${price:.2f}")"""
 
     def place_order(
         self,
@@ -92,11 +88,59 @@ class Exchange:
 
             # Process the trades
             trades = executed_trades.trades
+            if trades:
+                total_quantity = sum(trade.size for trade in trades)
+                total_value = sum(trade.price * trade.size for trade in trades)
+                average_price = (
+                    total_value / total_quantity if total_quantity > 0 else 0
+                )
 
-        #send them to a csv later 
+                self.last_prices[ticker] = trades[-1].price
 
+                if side.lower() == "buy":
+                    self.buy_volume[ticker] += total_quantity
+                else:
+                    self.sell_volume[ticker] += total_quantity
 
+                # self.update_market_price(ticker,side,total_quantity)
 
+                return {
+                    "success": True,
+                    "executed": True,
+                    "trades:": [
+                        {
+                            "ticker": ticker,
+                            "trader": trader_id,
+                            "side": side,
+                            "quantity": trade.size,
+                            "price": trade.price,
+                            "timestamp": trade.timestamp,
+                            "trade_id": trade.trade_id,
+                            "execution_type": trade.execution.name,
+                            "incoming_order_id": trade.incoming_order_id,
+                            "book_order_id": trade.book_order_id,
+                        }
+                        for trade in trades
+                    ],
+                    "summary": {
+                        "quantity_filled": total_quantity,
+                        "average_price": average_price,
+                        "num_trades": len(trades),
+                    },
+                }
+            else:
+                return {
+                    "success": True,
+                    "executed": False,
+                    "trades": [],
+                    "summary": {
+                        "quantity_filled": 0,
+                        "average_price": 0,
+                        "num_trades": 0,
+                    },
+                }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
 
 if __name__ == "__main__":
@@ -105,7 +149,5 @@ if __name__ == "__main__":
 
     exchange = Exchange(tickers, initial_prices)
 
-    print(
-        exchange.place_order("AAPL", "hi", "sell", 1, order_type="limit", price=180.0)
-    )
-    print(exchange.place_order("AAPL", "hdi", "buy", 1, order_type="market"))
+    exchange.place_order("AAPL", "hi", "sell", 1, order_type="limit", price=180.0)
+    exchange.place_order("AAPL", "hdi", "buy", 1, order_type="market")
