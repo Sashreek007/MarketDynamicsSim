@@ -1,14 +1,15 @@
 # Core Simulation Libraries
-cadCAD                  # Complex Adaptive Dynamics - our simulation engine
+simpy                   # Discrete event simulation engine
 pandas
 numpy
 
 # Order Book Engine
 order-matching
 
+# Visualization
 matplotlib
-seaborn                  
+seaborn
 
 # Utilities
-python-dateutil             # For handling dates and times in simulation
+python-dateutil         # For handling dates and times in simulation
 
