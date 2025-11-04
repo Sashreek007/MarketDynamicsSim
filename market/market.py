@@ -315,10 +315,18 @@ class Market:
         # Apply change to current price
         new_price = stock.current_price * (1 + price_change_pct)
 
-        # Ensure price doesn't go negative or too extreme
-        new_price = max(0.01, new_price)
-        new_price = min(new_price, stock.current_price * 1.15)  # Max 15% move at once
-        new_price = max(new_price, stock.current_price * 0.85)  # Max 15% move at once
+        # Ensure price doesn't go negative, zero, or infinity
+        if not (0 < new_price < float('inf')):
+            new_price = stock.current_price  # Keep current price if invalid
+
+        # Limit price movements to prevent extreme changes
+        max_increase = stock.current_price * 1.10  # Max 10% increase at once
+        min_decrease = stock.current_price * 0.90  # Max 10% decrease at once
+
+        new_price = max(min_decrease, min(new_price, max_increase))
+
+        # Absolute minimum price floor
+        new_price = max(1.0, new_price)
 
         # Update the stock price (this also updates market cap)
         stock.update_price(new_price)

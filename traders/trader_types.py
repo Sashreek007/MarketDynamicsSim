@@ -40,9 +40,18 @@ class AggressiveTrader(BaseTrader):
         volatility = market_data.get('volatility', 0.02)
         buy_volume = market_data.get('buy_volume', 0)
         sell_volume = market_data.get('sell_volume', 0)
+        sim_time = market_data.get('sim_time', 0)
 
         # Calculate momentum signal
         volume_ratio = (buy_volume / (sell_volume + 1))  # Avoid division by zero
+
+        # Early in simulation, establish positions with some random trading
+        if sim_time < 1.0 and random.random() < 0.3:
+            # Random initial position building
+            max_capital_to_use = self.cash * random.uniform(0.05, 0.10)
+            quantity = int(max_capital_to_use / current_price)
+            if quantity > 0 and self.can_afford(ticker, quantity, current_price):
+                return (ticker, 'buy', quantity, 0.0)  # Market order
 
         # Aggressive momentum following
         # Buy on upward momentum
@@ -173,6 +182,14 @@ class LossMakerTrader(BaseTrader):
         # Get market data
         price_change = market_data.get('price_change_pct', 0.0)
         volatility = market_data.get('volatility', 0.02)
+        sim_time = market_data.get('sim_time', 0)
+
+        # Impulsive random trades (LossMaker is impulsive!)
+        if random.random() < 0.2:
+            max_capital_to_use = self.cash * random.uniform(0.05, 0.15)
+            quantity = int(max_capital_to_use / current_price)
+            if quantity > 0 and self.can_afford(ticker, quantity, current_price):
+                return (ticker, 'buy', quantity, 0.0)  # Market order
 
         # BAD DECISION 1: Buy after price has already gone up (FOMO)
         if price_change > 0.01:  # Buy high

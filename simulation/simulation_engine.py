@@ -77,6 +77,9 @@ class MarketSimulation:
         self.total_trades = 0
         self.total_events = 0
 
+        # Seed initial liquidity in order books
+        self._seed_initial_liquidity()
+
         print("=" * 70)
         print("SIMULATION INITIALIZED")
         print("=" * 70)
@@ -124,6 +127,59 @@ class MarketSimulation:
                 initial_capital=initial_capital,
                 trade_probability=trade_probability
             )
+
+    def _seed_initial_liquidity(self):
+        """
+        Seed the order books with initial liquidity.
+
+        Creates buy and sell limit orders around current price so that
+        traders have liquidity to trade against.
+        """
+        from order_matching.order import LimitOrder
+        from order_matching.orders import Orders
+        from order_matching.side import Side
+
+        for ticker, stock in self.market.stocks.items():
+            current_price = stock.current_price
+
+            # Create buy orders (bids) below current price
+            buy_orders = []
+            for i in range(5):
+                price = current_price * (0.99 - i * 0.001)  # 1%, 1.1%, 1.2% below
+                quantity = random.uniform(50, 200)
+                order = LimitOrder(
+                    side=Side.BUY,
+                    price=price,
+                    size=quantity,
+                    timestamp=self.market.timestamp,
+                    order_id=f"seed_buy_{ticker}_{i}",
+                    trader_id="MarketMaker"
+                )
+                buy_orders.append(order)
+
+            # Create sell orders (asks) above current price
+            sell_orders = []
+            for i in range(5):
+                price = current_price * (1.01 + i * 0.001)  # 1%, 1.1%, 1.2% above
+                quantity = random.uniform(50, 200)
+                order = LimitOrder(
+                    side=Side.SELL,
+                    price=price,
+                    size=quantity,
+                    timestamp=self.market.timestamp,
+                    order_id=f"seed_sell_{ticker}_{i}",
+                    trader_id="MarketMaker"
+                )
+                sell_orders.append(order)
+
+            # Place all orders in the book
+            all_orders = buy_orders + sell_orders
+            if all_orders:
+                orders_wrapper = Orders(all_orders)
+                self.market.matching_engines[ticker].match(
+                    timestamp=self.market.timestamp,
+                    orders=orders_wrapper
+                )
 
     def trader_process(self, trader_id: str):
         """

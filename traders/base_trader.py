@@ -68,8 +68,14 @@ class BaseTrader(ABC):
 
     def can_afford(self, ticker: str, quantity: float, price: float) -> bool:
         """Check if trader can afford a purchase."""
+        # Safety checks for invalid prices or quantities
+        if price <= 0 or not (0 < price < float('inf')):
+            return False
+        if quantity <= 0 or not (0 < quantity < float('inf')):
+            return False
+
         total_cost = quantity * price
-        return self.cash >= total_cost
+        return self.cash >= total_cost and total_cost < float('inf')
 
     def has_shares(self, ticker: str, quantity: float) -> bool:
         """Check if trader has enough shares to sell."""
