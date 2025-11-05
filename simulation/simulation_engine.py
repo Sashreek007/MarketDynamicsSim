@@ -267,6 +267,68 @@ class MarketSimulation:
                 apply_effect_to_market(effect, self.market, self.sim_time)
                 self.total_events += 1
 
+    def market_maker_process(self):
+        """
+        SimPy process for continuous market making.
+
+        Provides ongoing liquidity by placing limit orders around current price.
+        """
+        from order_matching.order import LimitOrder
+        from order_matching.orders import Orders
+        from order_matching.side import Side
+
+        while True:
+            # Add liquidity every half day
+            yield self.env.timeout(0.5)
+
+            self.sim_time = self.env.now
+
+            # For each stock, add fresh liquidity
+            for ticker, stock in self.market.stocks.items():
+                current_price = stock.current_price
+
+                # Add a few buy and sell orders around current price
+                orders = []
+
+                # 2 buy orders below price
+                for i in range(2):
+                    price = current_price * (0.995 - i * 0.002)
+                    quantity = random.uniform(30, 100)
+                    order = LimitOrder(
+                        side=Side.BUY,
+                        price=price,
+                        size=quantity,
+                        timestamp=self.market.timestamp,
+                        order_id=f"mm_buy_{ticker}_{self.sim_time}_{i}",
+                        trader_id="MarketMaker"
+                    )
+                    orders.append(order)
+
+                # 2 sell orders above price
+                for i in range(2):
+                    price = current_price * (1.005 + i * 0.002)
+                    quantity = random.uniform(30, 100)
+                    order = LimitOrder(
+                        side=Side.SELL,
+                        price=price,
+                        size=quantity,
+                        timestamp=self.market.timestamp,
+                        order_id=f"mm_sell_{ticker}_{self.sim_time}_{i}",
+                        trader_id="MarketMaker"
+                    )
+                    orders.append(order)
+
+                # Place orders in the book
+                if orders:
+                    orders_wrapper = Orders(orders)
+                    try:
+                        self.market.matching_engines[ticker].match(
+                            timestamp=self.market.timestamp,
+                            orders=orders_wrapper
+                        )
+                    except:
+                        pass  # Ignore market maker errors
+
     def logging_process(self):
         """
         SimPy process for periodic logging.
@@ -335,6 +397,9 @@ class MarketSimulation:
 
         # Start market effects process
         self.env.process(self.market_effects_process())
+
+        # Start market maker process (provides continuous liquidity)
+        self.env.process(self.market_maker_process())
 
         # Start logging process
         self.env.process(self.logging_process())

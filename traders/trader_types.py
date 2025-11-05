@@ -50,35 +50,39 @@ class AggressiveTrader(BaseTrader):
         volume_ratio = (buy_volume / (sell_volume + 1))  # Avoid division by zero
 
         # Early in simulation, establish positions with some random trading
-        if sim_time < 1.0 and random.random() < 0.3:
-            # Random initial position building
-            max_capital_to_use = self.cash * random.uniform(0.05, 0.10)
+        if sim_time < 2.0 and random.random() < 0.2:
+            # Random initial position building (reduced to 20% chance)
+            max_capital_to_use = self.cash * random.uniform(0.03, 0.05)  # Smaller orders
             quantity = int(max_capital_to_use / current_price)
             if quantity > 0 and self.can_afford(ticker, quantity, current_price):
                 return (ticker, 'buy', quantity, 0.0)  # Market order
 
-        # Aggressive momentum following
-        # Buy on upward momentum
-        if price_change > 0.005 or volume_ratio > 1.2:
-            # Calculate aggressive order size (5-10% of capital)
-            max_capital_to_use = self.cash * random.uniform(0.05, 0.10)
-            quantity = int(max_capital_to_use / current_price)
+        # Check if we have holdings to potentially sell
+        current_holdings = self.holdings.get(ticker, 0)
 
-            if quantity > 0 and self.can_afford(ticker, quantity, current_price):
-                # Use limit order slightly above current price (aggressive)
-                limit_price = current_price * 1.001  # 0.1% above market
-                return (ticker, 'buy', quantity, limit_price)
-
-        # Sell on downward momentum or to take profits
-        elif price_change < -0.003 or volume_ratio < 0.8:
-            current_holdings = self.holdings.get(ticker, 0)
-            if current_holdings > 0:
-                # Sell a significant portion (30-60%)
-                quantity = int(current_holdings * random.uniform(0.3, 0.6))
+        # More active selling to free up capital
+        if current_holdings > 0:
+            # Sell on any downward pressure
+            if price_change < -0.001 or volume_ratio < 0.9:
+                quantity = int(current_holdings * random.uniform(0.2, 0.4))
                 if quantity > 0:
-                    # Use limit order slightly below current price
-                    limit_price = current_price * 0.999  # 0.1% below market
-                    return (ticker, 'sell', quantity, limit_price)
+                    return (ticker, 'sell', quantity, 0.0)  # Market order for quick exit
+
+            # Also randomly take profits even without momentum (keep active)
+            if random.random() < 0.1:  # 10% chance to take profits
+                quantity = int(current_holdings * random.uniform(0.1, 0.3))
+                if quantity > 0:
+                    return (ticker, 'sell', quantity, 0.0)
+
+        # Buy on upward momentum (only if we have cash)
+        if self.cash > current_price * 10:  # At least afford 10 shares
+            if price_change > 0.002 or volume_ratio > 1.1 or random.random() < 0.15:
+                # Calculate aggressive order size (3-8% of capital) - smaller
+                max_capital_to_use = self.cash * random.uniform(0.03, 0.08)
+                quantity = int(max_capital_to_use / current_price)
+
+                if quantity > 0 and self.can_afford(ticker, quantity, current_price):
+                    return (ticker, 'buy', quantity, 0.0)  # Market order
 
         # Also consider profit taking
         if ticker in self.cost_basis:
@@ -197,11 +201,22 @@ class LossMakerTrader(BaseTrader):
         sim_time = market_data.get('sim_time', 0)
 
         # Impulsive random trades (LossMaker is impulsive!)
-        if random.random() < 0.2:
-            max_capital_to_use = self.cash * random.uniform(0.05, 0.15)
-            quantity = int(max_capital_to_use / current_price)
-            if quantity > 0 and self.can_afford(ticker, quantity, current_price):
-                return (ticker, 'buy', quantity, 0.0)  # Market order
+        if random.random() < 0.25:  # 25% chance of impulsive trade
+            # Randomly buy OR sell
+            if random.random() < 0.5:
+                # Impulsive buy
+                if self.cash > current_price * 10:
+                    max_capital_to_use = self.cash * random.uniform(0.03, 0.10)
+                    quantity = int(max_capital_to_use / current_price)
+                    if quantity > 0 and self.can_afford(ticker, quantity, current_price):
+                        return (ticker, 'buy', quantity, 0.0)
+            else:
+                # Impulsive sell
+                current_holdings = self.holdings.get(ticker, 0)
+                if current_holdings > 0:
+                    quantity = int(current_holdings * random.uniform(0.2, 0.5))
+                    if quantity > 0:
+                        return (ticker, 'sell', quantity, 0.0)
 
         # BAD DECISION 1: Buy after price has already gone up (FOMO)
         if price_change > 0.01:  # Buy high

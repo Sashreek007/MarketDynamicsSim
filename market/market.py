@@ -64,14 +64,29 @@ class Stock:
         Args:
             new_price: New price for the stock
         """
+        # Validate new price before applying
+        if not (0 < new_price < float('inf')):
+            return  # Skip update if price is invalid
+
+        # Additional sanity check: price shouldn't change more than 50% at once
+        if new_price > self.current_price * 1.5 or new_price < self.current_price * 0.5:
+            return  # Skip extreme price changes
+
         self.last_price = self.current_price
         self.current_price = new_price
 
         # Update market cap dynamically
         self.market_cap = self.current_price * self.total_shares
 
+        # Validate market cap
+        if not (0 < self.market_cap < float('inf')):
+            self.market_cap = self.initial_price * self.total_shares
+
         # Update price change percentage
-        self.price_change_pct = (self.current_price - self.last_price) / self.last_price
+        if self.last_price > 0:
+            self.price_change_pct = (self.current_price - self.last_price) / self.last_price
+        else:
+            self.price_change_pct = 0.0
 
         # Add to price history
         self.price_history.append(new_price)
@@ -236,10 +251,24 @@ class Market:
             trades = executed_trades.trades
 
             if trades:
-                # Process executed trades
-                total_quantity = sum(trade.size for trade in trades)
-                total_value = sum(trade.price * trade.size for trade in trades)
-                average_price = total_value / total_quantity if total_quantity > 0 else 0
+                # Process executed trades - filter out invalid prices
+                valid_trades = [t for t in trades if 0 < t.price < float('inf') and 0 < t.size < float('inf')]
+
+                if not valid_trades:
+                    # All trades had invalid prices, skip
+                    return {
+                        'success': True,
+                        'executed': False,
+                        'message': 'Trades executed but prices invalid'
+                    }
+
+                total_quantity = sum(trade.size for trade in valid_trades)
+                total_value = sum(trade.price * trade.size for trade in valid_trades)
+                average_price = total_value / total_quantity if total_quantity > 0 else self.stocks[ticker].current_price
+
+                # Final validation
+                if not (0 < average_price < float('inf')):
+                    average_price = self.stocks[ticker].current_price
 
                 # Update stock price based on trade
                 self._update_price_from_trade(ticker, side, total_quantity, average_price)
