@@ -46,7 +46,7 @@ RANDOM_SEED = 42
 TRADE_PROBABILITY = {
     "Aggressive": 0.7,
     "Conservative": 0.3,
-    "LossMaker": 0.8,
+    "LossMaker": 0.9,  # Increased to 90% - they trade MORE (making more bad decisions = more losses)
     "LongTerm": 0.2,
 }
 

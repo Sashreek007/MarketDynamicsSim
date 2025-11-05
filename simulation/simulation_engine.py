@@ -70,7 +70,7 @@ class MarketSimulation:
         # Initialize market effects engine
         self.effects_engine = MarketEffectsEngine(
             tickers=list(self.market.stocks.keys()),
-            random_event_probability=0.05  # 5% chance per trading session
+            random_event_probability=0.01  # 1% chance per trading session (reduced)
         )
 
         # Statistics

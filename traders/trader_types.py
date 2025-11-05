@@ -57,32 +57,44 @@ class AggressiveTrader(BaseTrader):
             if quantity > 0 and self.can_afford(ticker, quantity, current_price):
                 return (ticker, 'buy', quantity, 0.0)  # Market order
 
-        # Check if we have holdings to potentially sell
         current_holdings = self.holdings.get(ticker, 0)
 
-        # More active selling to free up capital
-        if current_holdings > 0:
-            # Sell on any downward pressure
-            if price_change < -0.001 or volume_ratio < 0.9:
-                quantity = int(current_holdings * random.uniform(0.2, 0.4))
-                if quantity > 0:
-                    return (ticker, 'sell', quantity, 0.0)  # Market order for quick exit
+        # AGGRESSIVE MOMENTUM STRATEGY: Ride winners, cut losers fast
 
-            # Also randomly take profits even without momentum (keep active)
-            if random.random() < 0.1:  # 10% chance to take profits
-                quantity = int(current_holdings * random.uniform(0.1, 0.3))
+        # Check current position P&L
+        if current_holdings > 0 and ticker in self.cost_basis:
+            pnl_pct = (current_price - self.cost_basis[ticker]) / self.cost_basis[ticker]
+
+            # CUT LOSERS FAST (stop loss at -3%)
+            if pnl_pct < -0.03:
+                # Get out of losing positions quickly
+                quantity = int(current_holdings * random.uniform(0.7, 1.0))  # Sell most/all
                 if quantity > 0:
                     return (ticker, 'sell', quantity, 0.0)
 
-        # Buy on upward momentum (only if we have cash)
-        if self.cash > current_price * 10:  # At least afford 10 shares
-            if price_change > 0.002 or volume_ratio > 1.1 or random.random() < 0.15:
-                # Calculate aggressive order size (3-8% of capital) - smaller
-                max_capital_to_use = self.cash * random.uniform(0.03, 0.08)
+            # TAKE BIG PROFITS on winners (let winners run to 10%+, then take profits)
+            elif pnl_pct > 0.10:  # Up 10%+
+                # Take some profits but keep riding
+                quantity = int(current_holdings * random.uniform(0.3, 0.5))  # Sell 30-50%
+                if quantity > 0:
+                    return (ticker, 'sell', quantity, 0.0)
+
+        # BUY on STRONG upward momentum (ride the trend)
+        if price_change > 0.005 or volume_ratio > 1.3:  # Strong momentum
+            if self.cash > current_price * 10:
+                # Aggressive sizing on strong signals
+                max_capital_to_use = self.cash * random.uniform(0.06, 0.12)
                 quantity = int(max_capital_to_use / current_price)
 
                 if quantity > 0 and self.can_afford(ticker, quantity, current_price):
-                    return (ticker, 'buy', quantity, 0.0)  # Market order
+                    return (ticker, 'buy', quantity, 0.0)
+
+        # SELL on downward momentum (trend reversal)
+        if current_holdings > 0:
+            if price_change < -0.005:  # Strong downward move
+                quantity = int(current_holdings * random.uniform(0.4, 0.6))
+                if quantity > 0:
+                    return (ticker, 'sell', quantity, 0.0)
 
         # Also consider profit taking
         if ticker in self.cost_basis:
@@ -129,31 +141,47 @@ class ConservativeTrader(BaseTrader):
         price_change = market_data.get('price_change_pct', 0.0)
         volatility = market_data.get('volatility', 0.02)
         initial_price = market_data.get('initial_price', current_price)
+        sim_time = market_data.get('sim_time', 0)
 
         # Calculate value metrics
         price_vs_initial = (current_price - initial_price) / initial_price
+        current_holdings = self.holdings.get(ticker, 0)
 
-        # Buy on significant dips (value opportunity)
-        if price_change < -0.01 or price_vs_initial < -0.03:
-            # Conservative position sizing (2-5% of capital)
-            max_capital_to_use = self.cash * random.uniform(0.02, 0.05)
-            quantity = int(max_capital_to_use / current_price)
+        # Conservative traders should slowly build positions
+        # More relaxed conditions - trade more frequently
 
-            if quantity > 0 and self.can_afford(ticker, quantity, current_price):
-                # Use limit order below current price (patient)
-                limit_price = current_price * 0.998  # 0.2% below market
-                return (ticker, 'buy', quantity, limit_price)
+        # Buy on ANY dips or just for diversification (if we have lots of cash)
+        cash_ratio = self.cash / self.initial_capital
+        if cash_ratio > 0.7:  # Have >70% cash, should be investing
+            # Any slight dip or just random opportunity
+            if price_change < 0 or random.random() < 0.15:
+                if self.cash > current_price * 10:
+                    # Conservative position sizing (2-4% of capital)
+                    max_capital_to_use = self.cash * random.uniform(0.02, 0.04)
+                    quantity = int(max_capital_to_use / current_price)
 
-        # Sell on high valuations or to reduce risk
-        elif price_vs_initial > 0.05:  # Up 5% from initial
-            current_holdings = self.holdings.get(ticker, 0)
-            if current_holdings > 0:
-                # Sell small portion to lock in gains (10-25%)
-                quantity = int(current_holdings * random.uniform(0.1, 0.25))
-                if quantity > 0:
-                    # Use limit order above current price (patient)
-                    limit_price = current_price * 1.002  # 0.2% above market
-                    return (ticker, 'sell', quantity, limit_price)
+                    if quantity > 0 and self.can_afford(ticker, quantity, current_price):
+                        # Use market order for guaranteed execution
+                        return (ticker, 'buy', quantity, 0.0)
+
+        # Buy on dips (value opportunity) - more relaxed
+        elif price_change < -0.002 or price_vs_initial < -0.01:  # Much more sensitive
+            if self.cash > current_price * 10:
+                max_capital_to_use = self.cash * random.uniform(0.02, 0.05)
+                quantity = int(max_capital_to_use / current_price)
+
+                if quantity > 0 and self.can_afford(ticker, quantity, current_price):
+                    return (ticker, 'buy', quantity, 0.0)  # Market order
+
+        # Sell to lock in gains (more active)
+        if current_holdings > 0:
+            # Sell on any profit or to rebalance
+            if ticker in self.cost_basis:
+                gain_pct = (current_price - self.cost_basis[ticker]) / self.cost_basis[ticker]
+                if gain_pct > 0.02 or random.random() < 0.08:  # 2% gain or random
+                    quantity = int(current_holdings * random.uniform(0.1, 0.25))
+                    if quantity > 0:
+                        return (ticker, 'sell', quantity, 0.0)  # Market order
 
         # Risk management: sell if position has grown too large
         portfolio_value = self.get_portfolio_value({ticker: current_price})
@@ -200,72 +228,53 @@ class LossMakerTrader(BaseTrader):
         volatility = market_data.get('volatility', 0.02)
         sim_time = market_data.get('sim_time', 0)
 
-        # Impulsive random trades (LossMaker is impulsive!)
-        if random.random() < 0.25:  # 25% chance of impulsive trade
-            # Randomly buy OR sell
-            if random.random() < 0.5:
-                # Impulsive buy
-                if self.cash > current_price * 10:
-                    max_capital_to_use = self.cash * random.uniform(0.03, 0.10)
-                    quantity = int(max_capital_to_use / current_price)
-                    if quantity > 0 and self.can_afford(ticker, quantity, current_price):
-                        return (ticker, 'buy', quantity, 0.0)
-            else:
-                # Impulsive sell
-                current_holdings = self.holdings.get(ticker, 0)
-                if current_holdings > 0:
-                    quantity = int(current_holdings * random.uniform(0.2, 0.5))
-                    if quantity > 0:
-                        return (ticker, 'sell', quantity, 0.0)
+        current_holdings = self.holdings.get(ticker, 0)
 
-        # BAD DECISION 1: Buy after price has already gone up (FOMO)
-        if price_change > 0.01:  # Buy high
-            max_capital_to_use = self.cash * random.uniform(0.05, 0.15)
-            quantity = int(max_capital_to_use / current_price)
+        # Check position P&L for bad decisions
+        if current_holdings > 0 and ticker in self.cost_basis:
+            loss_pct = (current_price - self.cost_basis[ticker]) / self.cost_basis[ticker]
 
-            if quantity > 0 and self.can_afford(ticker, quantity, current_price):
-                # Pay even more (market order that executes at ask)
-                return (ticker, 'buy', quantity, 0.0)  # Market order
-
-        # BAD DECISION 2: Panic sell after price drops
-        elif price_change < -0.008:  # Sell low
-            current_holdings = self.holdings.get(ticker, 0)
-            if current_holdings > 0:
-                # Panic sell large portion
-                quantity = int(current_holdings * random.uniform(0.4, 0.7))
+            # BAD DECISION: Sell winners IMMEDIATELY at tiny gains
+            if loss_pct > 0.005:  # Just 0.5% gain - sell NOW!
+                quantity = int(current_holdings * random.uniform(0.7, 1.0))  # Sell ALL
                 if quantity > 0:
-                    # Sell at market (accepting lower price)
-                    return (ticker, 'sell', quantity, 0.0)  # Market order
+                    return (ticker, 'sell', quantity, 0.0)
 
-        # BAD DECISION 3: Sell winners too early, hold losers
-        if ticker in self.cost_basis:
-            unrealized_gain_pct = (current_price - self.cost_basis[ticker]) / self.cost_basis[ticker]
+            # BAD DECISION: HOLD LOSERS (never sell losing positions)
+            # They just hold forever hoping it recovers - this costs them money
+            # No selling of losers = losses accumulate
 
-            # Sell winning positions too early (small gain)
-            if 0.02 < unrealized_gain_pct < 0.04 and random.random() < 0.4:
-                current_holdings = self.holdings.get(ticker, 0)
-                if current_holdings > 0:
-                    # Sell most of position
-                    quantity = int(current_holdings * random.uniform(0.5, 0.8))
-                    if quantity > 0:
-                        return (ticker, 'sell', quantity, 0.0)
+        # BAD DECISION 1: Buy HIGH (FOMO after big gains)
+        if price_change > 0.002:  # Buy when rising (terrible timing!)
+            if self.cash > current_price * 10:
+                # Buy BIG at the TOP
+                max_capital_to_use = self.cash * random.uniform(0.10, 0.20)  # Huge orders!
+                quantity = int(max_capital_to_use / current_price)
 
-            # Hold losing positions (hope they recover)
-            # This is modeled by NOT selling when down
+                if quantity > 0 and self.can_afford(ticker, quantity, current_price):
+                    return (ticker, 'buy', quantity, 0.0)  # Market order - pays TOP
 
-        # BAD DECISION 4: Random impulsive trades on high volatility
-        if volatility > 0.03 and random.random() < 0.3:
-            if random.random() < 0.5:  # Random buy
-                max_capital_to_use = self.cash * random.uniform(0.03, 0.08)
+        # BAD DECISION 2: Panic sell LOW (on any dip)
+        if price_change < -0.002:  # Panic on tiny drops!
+            if current_holdings > 0:
+                # Panic dump EVERYTHING
+                quantity = int(current_holdings * random.uniform(0.8, 1.0))  # Sell ALL
+                if quantity > 0:
+                    return (ticker, 'sell', quantity, 0.0)  # Market order - sells at BOTTOM
+
+        # BAD DECISION 3: Impulsive random bad trades
+        if random.random() < 0.15:  # 15% chance of random bad trade
+            if self.cash > current_price * 10 and random.random() < 0.5:
+                # Impulsive buy at bad time
+                max_capital_to_use = self.cash * random.uniform(0.05, 0.15)
                 quantity = int(max_capital_to_use / current_price)
                 if quantity > 0 and self.can_afford(ticker, quantity, current_price):
                     return (ticker, 'buy', quantity, 0.0)
-            else:  # Random sell
-                current_holdings = self.holdings.get(ticker, 0)
-                if current_holdings > 0:
-                    quantity = int(current_holdings * random.uniform(0.2, 0.5))
-                    if quantity > 0:
-                        return (ticker, 'sell', quantity, 0.0)
+            elif current_holdings > 0:
+                # Impulsive sell
+                quantity = int(current_holdings * random.uniform(0.4, 0.7))
+                if quantity > 0:
+                    return (ticker, 'sell', quantity, 0.0)
 
         return None
 
@@ -320,46 +329,54 @@ class LongTermTrader(BaseTrader):
         current_allocation = holdings_value / portfolio_value if portfolio_value > 0 else 0
         target = self.target_allocation[ticker]
 
-        # ACCUMULATION STRATEGY: Slowly build to target allocation
-        if current_allocation < target:
-            # Buy on any weakness (patient accumulation)
-            if price_change <= 0 or random.random() < 0.3:
-                # Calculate how much to buy to move toward target
-                target_value = portfolio_value * target
-                needed_value = target_value - holdings_value
-                max_buy = self.cash * 0.15  # Max 15% of cash at once
+        # SIMPLIFIED LONG-TERM STRATEGY: Gradual accumulation
+        # LongTerm traders should build positions over time
 
-                capital_to_use = min(needed_value, max_buy)
-                quantity = int(capital_to_use / current_price)
+        # If we have lots of cash, we should be buying
+        cash_ratio = self.cash / self.initial_capital
+
+        # ACCUMULATION: Buy when we have cash and it's a decent time
+        if cash_ratio > 0.5:  # Have >50% cash
+            # Buy on any dip, or just randomly to accumulate
+            if price_change < 0 or random.random() < 0.25:  # 25% chance
+                if self.cash > current_price * 10:
+                    # Larger position sizing for long term (5-12% of capital)
+                    max_capital_to_use = self.cash * random.uniform(0.05, 0.12)
+                    quantity = int(max_capital_to_use / current_price)
+
+                    if quantity > 0 and self.can_afford(ticker, quantity, current_price):
+                        # Use market order for guaranteed execution
+                        self.last_trade_time[ticker] = sim_time
+                        return (ticker, 'buy', quantity, 0.0)
+
+        # ACCUMULATION when allocation is low
+        if current_allocation < target:
+            # More active buying - don't be too picky
+            if random.random() < 0.4 or price_change < -0.005:  # 40% chance or dip
+                if self.cash > current_price * 10:
+                    max_capital_to_use = self.cash * random.uniform(0.05, 0.15)
+                    quantity = int(max_capital_to_use / current_price)
+
+                    if quantity > 0 and self.can_afford(ticker, quantity, current_price):
+                        self.last_trade_time[ticker] = sim_time
+                        return (ticker, 'buy', quantity, 0.0)  # Market order
+
+        # REBALANCING: Sell if allocation gets too high (rarely)
+        elif current_allocation > target * 1.8:  # 80% over target
+            if current_holdings > 0:
+                quantity = int(current_holdings * 0.15)  # Sell 15%
+                if quantity > 0:
+                    return (ticker, 'sell', quantity, 0.0)
+
+        # OPPORTUNISTIC BUYING: Any dip is opportunity
+        price_vs_initial = (current_price - initial_price) / initial_price
+        if price_vs_initial < -0.05:  # Down 5% from initial (less strict)
+            if self.cash > current_price * 10:
+                max_capital_to_use = self.cash * random.uniform(0.05, 0.10)
+                quantity = int(max_capital_to_use / current_price)
 
                 if quantity > 0 and self.can_afford(ticker, quantity, current_price):
-                    # Use limit order to get good price
-                    limit_price = current_price * 0.997  # 0.3% below market
-                    self.last_trade_time[ticker] = sim_time
-                    return (ticker, 'buy', quantity, limit_price)
-
-        # REBALANCING: Sell if allocation gets too high
-        elif current_allocation > target * 1.5:  # 50% over target
-            # Trim position back to target
-            target_value = portfolio_value * target
-            excess_value = holdings_value - target_value
-            quantity = int(excess_value / current_price)
-
-            if quantity > 0:
-                # Use limit order to get good price
-                limit_price = current_price * 1.003  # 0.3% above market
-                return (ticker, 'sell', quantity, limit_price)
-
-        # OPPORTUNISTIC BUYING: Major dips are buying opportunities
-        price_vs_initial = (current_price - initial_price) / initial_price
-        if price_vs_initial < -0.10:  # Down 10% from initial
-            # This is a buying opportunity regardless of allocation
-            max_capital_to_use = self.cash * random.uniform(0.08, 0.12)
-            quantity = int(max_capital_to_use / current_price)
-
-            if quantity > 0 and self.can_afford(ticker, quantity, current_price):
-                limit_price = current_price * 0.995  # 0.5% below market
-                return (ticker, 'buy', quantity, limit_price)
+                    return (ticker, 'buy', quantity, 0.0)  # Market order
 
         # Generally don't sell - buy and hold philosophy
         # Only sell for rebalancing (handled above)
