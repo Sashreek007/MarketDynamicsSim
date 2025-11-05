@@ -35,6 +35,10 @@ class AggressiveTrader(BaseTrader):
         if not self.should_trade():
             return None
 
+        # Validate price - skip if invalid
+        if not (0 < current_price < float('inf')):
+            return None
+
         # Get market data
         price_change = market_data.get('price_change_pct', 0.0)
         volatility = market_data.get('volatility', 0.02)
@@ -113,6 +117,10 @@ class ConservativeTrader(BaseTrader):
         if not self.should_trade():
             return None
 
+        # Validate price - skip if invalid
+        if not (0 < current_price < float('inf')):
+            return None
+
         # Get market data
         price_change = market_data.get('price_change_pct', 0.0)
         volatility = market_data.get('volatility', 0.02)
@@ -177,6 +185,10 @@ class LossMakerTrader(BaseTrader):
         This trader does the opposite of what they should do.
         """
         if not self.should_trade():
+            return None
+
+        # Validate price - skip if invalid
+        if not (0 < current_price < float('inf')):
             return None
 
         # Get market data
@@ -270,6 +282,10 @@ class LongTermTrader(BaseTrader):
         Focuses on building positions over time and holding through volatility.
         """
         if not self.should_trade():
+            return None
+
+        # Validate price - skip if invalid
+        if not (0 < current_price < float('inf')):
             return None
 
         # Get market data

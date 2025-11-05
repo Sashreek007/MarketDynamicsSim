@@ -95,11 +95,20 @@ class BaseTrader(ABC):
         """
         total_cost = quantity * price
 
+        # Validate total_cost
+        if not (0 < total_cost < float('inf')):
+            return False
+
         if not self.can_afford(ticker, quantity, price):
             return False
 
         # Update cash
         self.cash -= total_cost
+
+        # Ensure cash stays valid (should always be >= 0 after buy)
+        if self.cash < 0 or not (self.cash < float('inf')):
+            self.cash = 0
+            return False
 
         # Update holdings
         current_qty = self.holdings.get(ticker, 0.0)
@@ -138,8 +147,17 @@ class BaseTrader(ABC):
 
         total_proceeds = quantity * price
 
+        # Validate total_proceeds
+        if not (0 < total_proceeds < float('inf')):
+            return False
+
         # Update cash
         self.cash += total_proceeds
+
+        # Ensure cash stays valid
+        if not (0 <= self.cash < float('inf')):
+            self.cash = self.initial_capital  # Reset to initial if corrupted
+            return False
 
         # Update holdings
         current_qty = self.holdings.get(ticker, 0.0)

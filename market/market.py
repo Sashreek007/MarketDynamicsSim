@@ -421,7 +421,18 @@ class Market:
 
     def get_current_price(self, ticker: str) -> float:
         """Get current price for a stock."""
-        return self.stocks[ticker].current_price if ticker in self.stocks else 0.0
+        if ticker not in self.stocks:
+            return 0.0
+
+        price = self.stocks[ticker].current_price
+
+        # Ensure price is valid
+        if not (0 < price < float('inf')):
+            # Reset to initial price if corrupted
+            price = self.stocks[ticker].initial_price
+            self.stocks[ticker].current_price = price
+
+        return price
 
     def get_current_prices(self) -> Dict[str, float]:
         """Get current prices for all stocks."""
