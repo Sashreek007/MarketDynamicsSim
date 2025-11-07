@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban Todo App - React</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .column {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            min-height: 400px;
+        }
+
+        .column-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid;
+        }
+
+        .column.todo .column-header {
+            border-color: #e74c3c;
+        }
+
+        .column.in-progress .column-header {
+            border-color: #f39c12;
+        }
+
+        .column.done .column-header {
+            border-color: #27ae60;
+        }
+
+        .column-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .task-count {
+            background: #ecf0f1;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #7f8c8d;
+        }
+
+        .tasks {
+            min-height: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .tasks.drag-over {
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 8px;
+        }
+
+        .task {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            cursor: move;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .task:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .column.todo .task {
+            border-left-color: #e74c3c;
+        }
+
+        .column.in-progress .task {
+            border-left-color: #f39c12;
+        }
+
+        .column.done .task {
+            border-left-color: #27ae60;
+        }
+
+        .task.dragging {
+            opacity: 0.5;
+            transform: rotate(2deg);
+        }
+
+        .task-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .task-text {
+            flex: 1;
+            color: #2c3e50;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .delete-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+
+        .delete-btn:hover {
+            background: #c0392b;
+        }
+
+        .add-task-form {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .add-task-input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #bdc3c7;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        .add-task-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .add-task-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .add-task-btn:hover {
+            background: #5568d3;
+        }
+
+        .add-task-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 768px) {
+            .board {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Task Component
+        const Task = ({ task, onDelete, onDragStart, onDragEnd }) => {
+            return (
+                <div
+                    className="task"
+                    draggable
+                    onDragStart={(e) => onDragStart(e, task)}
+                    onDragEnd={onDragEnd}
+                >
+                    <div className="task-content">
+                        <div className="task-text">{task.text}</div>
+                        <button className="delete-btn" onClick={() => onDelete(task.id)}>
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        // Column Component
+        const Column = ({
+            title,
+            icon,
+            columnId,
+            tasks,
+            onDelete,
+            onDrop,
+            onDragStart,
+            onDragEnd,
+            onDragOver,
+            onDragLeave
+        }) => {
+            return (
+                <div className={`column ${columnId}`}>
+                    <div className="column-header">
+                        <span className="column-title">{icon} {title}</span>
+                        <span className="task-count">{tasks.length}</span>
+                    </div>
+                    <div
+                        className="tasks"
+                        onDrop={(e) => onDrop(e, columnId)}
+                        onDragOver={onDragOver}
+                        onDragLeave={onDragLeave}
+                    >
+                        {tasks.map(task => (
+                            <Task
+                                key={task.id}
+                                task={task}
+                                onDelete={onDelete}
+                                onDragStart={onDragStart}
+                                onDragEnd={onDragEnd}
+                            />
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        // Main App Component
+        const KanbanApp = () => {
+            const [tasks, setTasks] = useState({
+                todo: [],
+                'in-progress': [],
+                done: []
+            });
+            const [inputValue, setInputValue] = useState('');
+            const [draggedTask, setDraggedTask] = useState(null);
+
+            // Load tasks from localStorage on mount
+            useEffect(() => {
+                const savedTasks = localStorage.getItem('kanbanTasks');
+                if (savedTasks) {
+                    setTasks(JSON.parse(savedTasks));
+                }
+            }, []);
+
+            // Save tasks to localStorage whenever they change
+            useEffect(() => {
+                localStorage.setItem('kanbanTasks', JSON.stringify(tasks));
+            }, [tasks]);
+
+            const addTask = () => {
+                const text = inputValue.trim();
+                if (!text) {
+                    alert('Please enter a task!');
+                    return;
+                }
+
+                const newTask = {
+                    id: Date.now().toString(),
+                    text: text
+                };
+
+                setTasks(prev => ({
+                    ...prev,
+                    todo: [...prev.todo, newTask]
+                }));
+
+                setInputValue('');
+            };
+
+            const deleteTask = (taskId) => {
+                if (!window.confirm('Are you sure you want to delete this task?')) {
+                    return;
+                }
+
+                setTasks(prev => {
+                    const newTasks = { ...prev };
+                    Object.keys(newTasks).forEach(column => {
+                        newTasks[column] = newTasks[column].filter(task => task.id !== taskId);
+                    });
+                    return newTasks;
+                });
+            };
+
+            const handleDragStart = (e, task) => {
+                setDraggedTask(task);
+                e.currentTarget.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            };
+
+            const handleDragEnd = (e) => {
+                e.currentTarget.classList.remove('dragging');
+            };
+
+            const handleDragOver = (e) => {
+                e.preventDefault();
+                e.currentTarget.classList.add('drag-over');
+                e.dataTransfer.dropEffect = 'move';
+            };
+
+            const handleDragLeave = (e) => {
+                e.currentTarget.classList.remove('drag-over');
+            };
+
+            const handleDrop = (e, targetColumn) => {
+                e.preventDefault();
+                e.currentTarget.classList.remove('drag-over');
+
+                if (!draggedTask) return;
+
+                // Remove task from source column
+                setTasks(prev => {
+                    const newTasks = { ...prev };
+
+                    // Remove from all columns
+                    Object.keys(newTasks).forEach(column => {
+                        newTasks[column] = newTasks[column].filter(task => task.id !== draggedTask.id);
+                    });
+
+                    // Add to target column
+                    newTasks[targetColumn] = [...newTasks[targetColumn], draggedTask];
+
+                    return newTasks;
+                });
+
+                setDraggedTask(null);
+            };
+
+            const handleKeyPress = (e) => {
+                if (e.key === 'Enter') {
+                    addTask();
+                }
+            };
+
+            return (
+                <div className="container">
+                    <h1>📋 Kanban Todo Board</h1>
+
+                    <div className="add-task-form">
+                        <input
+                            type="text"
+                            className="add-task-input"
+                            placeholder="Enter a new task..."
+                            value={inputValue}
+                            onChange={(e) => setInputValue(e.target.value)}
+                            onKeyPress={handleKeyPress}
+                        />
+                        <button
+                            className="add-task-btn"
+                            onClick={addTask}
+                            disabled={!inputValue.trim()}
+                        >
+                            Add Task
+                        </button>
+                    </div>
+
+                    <div className="board">
+                        <Column
+                            title="To Do"
+                            icon="📝"
+                            columnId="todo"
+                            tasks={tasks.todo}
+                            onDelete={deleteTask}
+                            onDrop={handleDrop}
+                            onDragStart={handleDragStart}
+                            onDragEnd={handleDragEnd}
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                        />
+                        <Column
+                            title="In Progress"
+                            icon="🚀"
+                            columnId="in-progress"
+                            tasks={tasks['in-progress']}
+                            onDelete={deleteTask}
+                            onDrop={handleDrop}
+                            onDragStart={handleDragStart}
+                            onDragEnd={handleDragEnd}
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                        />
+                        <Column
+                            title="Done"
+                            icon="✅"
+                            columnId="done"
+                            tasks={tasks.done}
+                            onDelete={deleteTask}
+                            onDrop={handleDrop}
+                            onDragStart={handleDragStart}
+                            onDragEnd={handleDragEnd}
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                        />
+                    </div>
+                </div>
+            );
+        };
+
+        // Render the app
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<KanbanApp />);
+    </script>
+</body>
+</html>

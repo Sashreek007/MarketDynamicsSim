@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban Todo App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .column {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            min-height: 400px;
+        }
+
+        .column-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid;
+        }
+
+        .column:nth-child(1) .column-header {
+            border-color: #e74c3c;
+        }
+
+        .column:nth-child(2) .column-header {
+            border-color: #f39c12;
+        }
+
+        .column:nth-child(3) .column-header {
+            border-color: #27ae60;
+        }
+
+        .column-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .task-count {
+            background: #ecf0f1;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #7f8c8d;
+        }
+
+        .tasks {
+            min-height: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .task {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            cursor: move;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .task:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .column:nth-child(1) .task {
+            border-left-color: #e74c3c;
+        }
+
+        .column:nth-child(2) .task {
+            border-left-color: #f39c12;
+        }
+
+        .column:nth-child(3) .task {
+            border-left-color: #27ae60;
+        }
+
+        .task.dragging {
+            opacity: 0.5;
+            transform: rotate(2deg);
+        }
+
+        .task-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .task-text {
+            flex: 1;
+            color: #2c3e50;
+            line-height: 1.4;
+        }
+
+        .delete-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: background 0.2s;
+        }
+
+        .delete-btn:hover {
+            background: #c0392b;
+        }
+
+        .add-task-form {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .add-task-input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #bdc3c7;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        .add-task-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .add-task-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .add-task-btn:hover {
+            background: #5568d3;
+        }
+
+        .tasks.drag-over {
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 8px;
+        }
+
+        @media (max-width: 768px) {
+            .board {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📋 Kanban Todo Board</h1>
+
+        <div class="add-task-form">
+            <input type="text" class="add-task-input" id="taskInput" placeholder="Enter a new task...">
+            <button class="add-task-btn" onclick="addTask()">Add Task</button>
+        </div>
+
+        <div class="board">
+            <div class="column">
+                <div class="column-header">
+                    <span class="column-title">📝 To Do</span>
+                    <span class="task-count" data-column="todo">0</span>
+                </div>
+                <div class="tasks" id="todo" ondrop="drop(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)"></div>
+            </div>
+
+            <div class="column">
+                <div class="column-header">
+                    <span class="column-title">🚀 In Progress</span>
+                    <span class="task-count" data-column="inprogress">0</span>
+                </div>
+                <div class="tasks" id="inprogress" ondrop="drop(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)"></div>
+            </div>
+
+            <div class="column">
+                <div class="column-header">
+                    <span class="column-title">✅ Done</span>
+                    <span class="task-count" data-column="done">0</span>
+                </div>
+                <div class="tasks" id="done" ondrop="drop(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let draggedElement = null;
+        let taskIdCounter = 0;
+
+        // Load tasks from localStorage on page load
+        window.onload = function() {
+            loadTasks();
+            updateAllCounts();
+        };
+
+        function addTask() {
+            const input = document.getElementById('taskInput');
+            const taskText = input.value.trim();
+
+            if (taskText === '') {
+                alert('Please enter a task!');
+                return;
+            }
+
+            const taskId = 'task-' + taskIdCounter++;
+            const todoColumn = document.getElementById('todo');
+
+            const task = createTaskElement(taskId, taskText);
+            todoColumn.appendChild(task);
+
+            input.value = '';
+            input.focus();
+
+            updateAllCounts();
+            saveTasks();
+        }
+
+        function createTaskElement(taskId, taskText) {
+            const task = document.createElement('div');
+            task.className = 'task';
+            task.draggable = true;
+            task.id = taskId;
+            task.ondragstart = drag;
+            task.ondragend = dragEnd;
+
+            task.innerHTML = `
+                <div class="task-content">
+                    <div class="task-text">${taskText}</div>
+                    <button class="delete-btn" onclick="deleteTask('${taskId}')">Delete</button>
+                </div>
+            `;
+
+            return task;
+        }
+
+        function deleteTask(taskId) {
+            const task = document.getElementById(taskId);
+            if (confirm('Are you sure you want to delete this task?')) {
+                task.remove();
+                updateAllCounts();
+                saveTasks();
+            }
+        }
+
+        function drag(ev) {
+            draggedElement = ev.target;
+            ev.target.classList.add('dragging');
+            ev.dataTransfer.effectAllowed = 'move';
+            ev.dataTransfer.setData('text/html', ev.target.innerHTML);
+        }
+
+        function dragEnd(ev) {
+            ev.target.classList.remove('dragging');
+        }
+
+        function allowDrop(ev) {
+            ev.preventDefault();
+            ev.currentTarget.classList.add('drag-over');
+            ev.dataTransfer.dropEffect = 'move';
+        }
+
+        function dragLeave(ev) {
+            ev.currentTarget.classList.remove('drag-over');
+        }
+
+        function drop(ev) {
+            ev.preventDefault();
+            ev.currentTarget.classList.remove('drag-over');
+
+            if (draggedElement) {
+                ev.currentTarget.appendChild(draggedElement);
+                draggedElement = null;
+                updateAllCounts();
+                saveTasks();
+            }
+        }
+
+        function updateAllCounts() {
+            const columns = ['todo', 'inprogress', 'done'];
+            columns.forEach(columnId => {
+                const column = document.getElementById(columnId);
+                const count = column.children.length;
+                const countElement = document.querySelector(`[data-column="${columnId}"]`);
+                countElement.textContent = count;
+            });
+        }
+
+        function saveTasks() {
+            const data = {
+                todo: [],
+                inprogress: [],
+                done: []
+            };
+
+            ['todo', 'inprogress', 'done'].forEach(columnId => {
+                const column = document.getElementById(columnId);
+                const tasks = column.querySelectorAll('.task');
+                tasks.forEach(task => {
+                    data[columnId].push({
+                        id: task.id,
+                        text: task.querySelector('.task-text').textContent
+                    });
+                });
+            });
+
+            localStorage.setItem('kanbanTasks', JSON.stringify(data));
+        }
+
+        function loadTasks() {
+            const savedData = localStorage.getItem('kanbanTasks');
+            if (!savedData) return;
+
+            const data = JSON.parse(savedData);
+
+            ['todo', 'inprogress', 'done'].forEach(columnId => {
+                const column = document.getElementById(columnId);
+                column.innerHTML = '';
+
+                if (data[columnId]) {
+                    data[columnId].forEach(taskData => {
+                        const task = createTaskElement(taskData.id, taskData.text);
+                        column.appendChild(task);
+
+                        // Update counter to avoid ID collisions
+                        const idNum = parseInt(taskData.id.split('-')[1]);
+                        if (idNum >= taskIdCounter) {
+                            taskIdCounter = idNum + 1;
+                        }
+                    });
+                }
+            });
+        }
+
+        // Allow adding tasks with Enter key
+        document.getElementById('taskInput').addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                addTask();
+            }
+        });
+    </script>
+</body>
+</html>
